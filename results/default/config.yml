@@ -1,0 +1,20 @@
+config_name: default
+
+# path related
+data_path: /groups1/gaa50131/datasets/MSCOCO
+caption_file_path: annotations/captions_train2017.txt
+
+max_epoch: 10
+num_worker: 4
+
+min_freq: 5
+max_len: 30
+batch_size: 64
+lr: 0.001
+beta1: 0.9
+beta2: 0.999
+
+feature_dim: 2048
+emb_dim: 300
+memory_dim: 512
+dropout_p: 0.5
