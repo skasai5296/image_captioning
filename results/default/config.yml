@@ -3,6 +3,8 @@ config_name: default
 # path related
 data_path: /home/seito/hdd/dsets/coco
 caption_file_path: annotations/captions_train2017.txt
+log_dir: ../logs
+result_dir: ../results
 
 max_epoch: 10
 num_worker: 4

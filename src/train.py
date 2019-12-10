@@ -1,5 +1,4 @@
 import sys, os
-import time
 import argparse
 import torch
 import shutil
@@ -12,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.optim as optim
 import torchvision.transforms as transforms
@@ -21,7 +21,7 @@ from addict import Dict
 
 from dataset import CocoDataset
 from vocab import BasicTokenizer
-from utils import Logger, AverageMeter
+from utils import Logger, AverageMeter, Timer
 from model import ImageEncoder, SimpleDecoder
 
 """
@@ -34,8 +34,8 @@ Args:
     criterion:          Loss function
     device:             CPU or GPU
 """
-def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device):
-    loss_meter = AverageMeter("NLL Loss", ":.5f")
+def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, logger, ep):
+    epoch_timer = Timer()
     for it, data in enumerate(train_iterator):
         image = data["image"]
         caption = data["caption"]
@@ -53,8 +53,9 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device):
         loss = criterion(decoded, caption)
         loss.backward()
         optimizer.step()
+        logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
         if it % 10 == 9:
-            print("iter {:06d} / {:06d} \t nll loss: {:.5f}".format(it+1, len(train_iterator), loss.item()), flush=True)
+            print("epoch {} | iter {} / {} done".format(epoch_timer, it+1, len(train_iterator)))
 
 """
 Validates and computes NLP metrics
@@ -69,6 +70,7 @@ Args:
 def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
     gt_list = []
     ans_list = []
+    val_timer = Timer()
     for it, data in enumerate(val_iterator):
         image = data["image"]
         raw_caption = data["caption"]
@@ -81,33 +83,35 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         gt_list.extend(raw_caption)
         ans_list.extend(generated)
         if it % 10 == 9:
-            print("iter {} / {}".format(it+1, len(val_iterator)), flush=True)
-    print("---METRICS---", flush=True)
+            print("validation {} | iter {} / {} done".format(val_timer, it+1, len(val_iterator)))
+    print("---METRICS---")
     try:
         metrics = evaluator.compute_metrics(ref_list=[gt_list], hyp_list=ans_list)
         for k, v in metrics.items():
             print("{}:\t\t{}".format(k, v))
     except:
         metrics = {}
-        print("could not evaluate, some sort of error in NLGEval", flush=True)
-    print("---METRICS---", flush=True)
+        print("could not evaluate, some sort of error in NLGEval")
+    print("---METRICS---")
     return metrics
 
 
 if __name__ == "__main__":
+
+    global_timer = Timer()
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='../results/default/config.yml')
     parser.add_argument('--resume', action="store_true", help='denotes if to continue training, will use config')
     opt = parser.parse_args()
-
     CONFIG = Dict(yaml.safe_load(open(opt.config)))
     print("CONFIGURATIONS:")
     pprint(CONFIG)
 
+    logger = SummaryWriter(log_dir=CONFIG.log_dir)
+
     tokenizer = BasicTokenizer(min_freq=CONFIG.min_freq, max_len=CONFIG.max_len)
     tokenizer.from_textfile(os.path.join(CONFIG.data_path, CONFIG.caption_file_path))
-    log = ["epoch", "Bleu-1", "Bleu-2", "Bleu-3", "Bleu-4", "METEOR", "CIDEr", "ROUGE_L"]
-    metric_logger = Logger(os.path.join("../results", CONFIG.config_name, "stats.tsv"), log)
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -136,13 +140,13 @@ if __name__ == "__main__":
     print("done!")
 
     for ep in range(CONFIG.max_epoch):
-        print("begin training for epoch {}".format(ep+1))
-        train_epoch(train_loader, encoder, decoder, optimizer, criterion, device)
-        print("done with training for epoch {}, beginning validation".format(ep+1))
+        print("global {} | begin training for epoch {}".format(global_timer, ep+1))
+        train_epoch(train_loader, encoder, decoder, optimizer, criterion, device, logger, ep)
+        print("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
         metrics = validate(val_loader, encoder, decoder, tokenizer, evaluator, device)
-        print("end validation for epoch {}".format(ep+1))
-        metrics["epoch"] = ep+1
-        metric_logger.log(metrics)
+        for key, val in metrics.items():
+            logger.add_scalar("metrics/{}".format(key), val, ep+1)
+        print("global {} | end epoch {}".format(global_timer, ep+1))
     print("done training!!")
 
 

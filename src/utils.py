@@ -56,22 +56,30 @@ class AverageMeter():
         fmtstr = "{name}: {avg" + self.fmt + "}"
         return fmtstr.format(**self.__dict__)
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+class Timer():
+    """Computes and stores the time"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.begin = time.time()
+
+    def __str__(self):
+        return sec2str(time.time()-self.begin)
 
 def sec2str(sec):
     if sec < 60:
-        return "elapsed: {:02d}s".format(int(sec))
+        return "time elapsed: {:02d}s".format(int(sec))
     elif sec < 3600:
         min = int(sec / 60)
         sec = int(sec - min * 60)
-        return "elapsed: {:02d}m{:02d}s".format(min, sec)
+        return "time elapsed: {:02d}m{:02d}s".format(min, sec)
     elif sec < 24 * 3600:
         min = int(sec / 60)
         hr = int(min / 60)
         sec = int(sec - min * 60)
         min = int(min - hr * 60)
-        return "elapsed: {:02d}h{:02d}m{:02d}s".format(hr, min, sec)
+        return "time elapsed: {:02d}h{:02d}m{:02d}s".format(hr, min, sec)
     elif sec < 365 * 24 * 3600:
         min = int(sec / 60)
         hr = int(min / 60)
@@ -79,7 +87,10 @@ def sec2str(sec):
         sec = int(sec - min * 60)
         min = int(min - hr * 60)
         hr = int(hr - dy * 24)
-        return "elapsed: {:02d} days, {:02d}h{:02d}m{:02d}s".format(dy, hr, min, sec)
+        return "time elapsed: {:02d} days, {:02d}h{:02d}m{:02d}s".format(dy, hr, min, sec)
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def weight_init(m):
     '''
