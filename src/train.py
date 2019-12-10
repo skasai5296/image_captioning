@@ -53,7 +53,7 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device):
         loss = criterion(decoded, caption)
         loss.backward()
         optimizer.step()
-        if it % 1 == 0:
+        if it % 10 == 9:
             print("iter {:06d} / {:06d} \t nll loss: {:.5f}".format(it+1, len(train_iterator), loss.item()), flush=True)
 
 """
@@ -80,7 +80,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
 
         gt_list.extend(raw_caption)
         ans_list.extend(generated)
-        if it % 1 == 0:
+        if it % 10 == 9:
             print("iter {} / {}".format(it+1, len(val_iterator)), flush=True)
     print("---METRICS---", flush=True)
     try:
@@ -88,7 +88,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         for k, v in metrics.items():
             print("{}:\t\t{}".format(k, v))
     except:
-        metrics = None
+        metrics = {}
         print("could not evaluate, some sort of error in NLGEval", flush=True)
     print("---METRICS---", flush=True)
     return metrics

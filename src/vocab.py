@@ -95,7 +95,7 @@ def cococap2txt(jsonfile: str, dst: str):
     with open(dst, 'w+') as f:
         f.write("\n".join(sentences))
 
-# for debugging
+# for debugging and creation of text file
 if __name__ == '__main__':
     root = "/home/seito/hdd/dsets/coco"
     file = os.path.join(root, "annotations/captions_train2017.json")

@@ -129,7 +129,7 @@ class SimpleDecoder(nn.Module):
             xn = self.emb(on.argmax(dim=1))
             out.append(on)
         # out: (bs x vocab_size x max_seqlen)
-        out = torch.stack(out, dim=-1).max(dim=1)[0]
+        out = torch.stack(out, dim=-1).argmax(dim=1)
         return out
 
 
