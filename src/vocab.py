@@ -34,6 +34,7 @@ class BasicTokenizer():
         self.field.build_vocab(sent_proc, min_freq=self.min_freq)
         self.len = len(self.field.vocab)
         self.padidx = self.field.vocab.stoi["<pad>"]
+        print("done!")
 
     """
     Tokenize and numericalize a single or batched sentence.
@@ -45,10 +46,13 @@ class BasicTokenizer():
     """
     def encode(self, sentence):
         assert isinstance(sentence, list) or isinstance(sentence, str)
-        if isinstance(sentence, str):
+        strflag = isinstance(sentence, str)
+        if strflag:
             sentence = [sentence]
         preprocessed = list(map(self.field.preprocess, sentence))
         out = self.field.process(preprocessed)
+        if strflag:
+            out = out.squeeze(0)
         return out
 
     """

@@ -13,8 +13,9 @@ batch_size: 64
 lr: 0.001
 beta1: 0.9
 beta2: 0.999
+cnn_arch: resnet50
 
-feature_dim: 2048
 emb_dim: 300
 memory_dim: 512
-dropout_p: 0.5
+dropout_p: 0
+ss_prob: 0

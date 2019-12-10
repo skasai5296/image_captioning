@@ -8,10 +8,10 @@ work is still in progress
 
 ## Setup
 - Use `environment.yml` if you are a conda user
-- Run `python -m spacy download en
+- Run `python -m spacy download en`
 - Install `nlg-eval` (instructions [here](https://github.com/Maluuba/nlg-eval/README.md))
 
 ## TODO
-- [ ] Implement dataset loading for MSCOCO
-- [ ] Add basic training code (models, loss)
-- [ ] Add evaluation (BLEU, METEOR, CIDEr, ...)
+- [x] Implement dataset loading for MSCOCO
+- [x] Add basic training code (models, loss)
+- [x] Add evaluation (BLEU, METEOR, CIDEr, ...)

@@ -47,8 +47,8 @@ class CocoDataset(Dataset):
         image = Image.open(os.path.join(self.img_path, path)).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
-        caption = self.tokenizer.encode([raw_caption])
-        length = caption.ne(self.tokenizer.padidx).sum(dim=1)
+        caption = self.tokenizer.encode(raw_caption)
+        length = caption.ne(self.tokenizer.padidx).sum()
 
         return {"img_id": img_id, "image": image, "raw_caption": raw_caption, "caption": caption, "length": length}
 
