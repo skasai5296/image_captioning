@@ -7,7 +7,7 @@ work is still in progress
 - Java >= 1.6 (for nlg-eval)
 
 ## Setup
-- Use `environment.yml` if you are a conda user
+- Run `conda env create --file environment.yml && conda activate captioning` if you are a conda user
 - Run `python -m spacy download en`
 - Install `nlg-eval` (instructions [here](https://github.com/Maluuba/nlg-eval/README.md))
 

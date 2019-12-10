@@ -45,6 +45,7 @@ class ImageEncoder(nn.Module):
 """
 RNN decoder for captioning, Google NIC
 Args:
+    feature_dim:    dimension of image features
     emb_dim:        dimension of word embeddings
     memory_dim:     dimension of LSTM memory
     vocab_size:     vocabulary size
@@ -53,7 +54,7 @@ Args:
     ss_prob:        scheduled sampling rate, 0 for teacher forcing and 1 for free running
 """
 class SimpleDecoder(nn.Module):
-    def __init__(self, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob):
+    def __init__(self, feature_dim, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob):
         super(SimpleDecoder, self).__init__()
         self.emb_dim = emb_dim
         self.memory_dim = memory_dim
@@ -61,7 +62,7 @@ class SimpleDecoder(nn.Module):
         self.max_seqlen = max_seqlen
         self.ss_prob = ss_prob
 
-        self.linear1 = nn.Linear(512, self.emb_dim)
+        self.linear1 = nn.Linear(feature_dim, self.emb_dim)
         self.emb = nn.Embedding(self.vocab_size, self.emb_dim)
         self.rnn = nn.LSTMCell(self.emb_dim, self.memory_dim)
         self.linear2 = nn.Linear(self.memory_dim, self.vocab_size)
@@ -78,7 +79,7 @@ class SimpleDecoder(nn.Module):
         torch.Tensor caption:       (bs x max_seqlen), torch.long
         torch.Tensor length:        (bs), torch.long
     Returns:
-        torch.Tensor out:           (bs x max_seqlen x vocab_size), contains logits
+        torch.Tensor out:           (bs x vocab_size x max_seqlen), contains logits
     """
     def forward(self, image, caption, length):
         bs = image.size(0)
@@ -86,39 +87,50 @@ class SimpleDecoder(nn.Module):
         feature = self.linear1(image)
         # (bs x max_seqlen) -> (bs x max_seqlen x emb_dim)
         caption = self.emb(caption)
-        xn = feature
-        x = []
-        for step in range(max(length)):
-            # hn: (bs x memory_dim)
-            hn, _ = self.rnn(xn, (hn, _))
-            # xn: (bs x vocab_size)
-            xn = self.linear2(self.dropout(hn))
-            x.append(xn)
+        # hn: (bs x memory_dim)
+        hn, cn = self.rnn(feature)
+        # on: (bs x vocab_size)
+        on = self.linear2(self.dropout(hn))
+        out = [on]
+        # xn: (bs x emb_dim)
+        xn = self.emb(on.argmax(dim=1))
+        for step in range(self.max_seqlen-1):
             # xn: (bs x emb_dim)
-            if np.random.uniform < self.ss_prob:
+            if np.random.uniform() < self.ss_prob:
                 xn = caption[:, step, :]
-        # out: (bs x max_seqlen x vocab_size)
-        out = torch.stack(x).transpose(1, 0)
+            # hn: (bs x memory_dim)
+            hn, cn = self.rnn(xn, (hn, cn))
+            # on: (bs x vocab_size)
+            on = self.linear2(self.dropout(hn))
+            # xn: (bs x emb_dim)
+            xn = self.emb(on.argmax(dim=1))
+            out.append(on)
+        # out: (bs x vocab_size x max_seqlen)
+        out = torch.stack(out, dim=-1)
         return out
 
-    # method : one of ['greedy', 'beamsearch']
-    def sample(self, image, method='greedy'):
-        outputlist = []
-        # inputs : (batch_size, 1, emb_size)
-        inputs = self.linear1(feature).unsqueeze(1)
-        for idx in range(self.max_seqlen):
-            hiddens, _ = self.rnn(inputs, _)
-            # outputs : (batch_size, vocab_size)
-            outputs = self.linear2(hiddens.squeeze(1))
-            outputlist.append(outputs)
-            # pred : (batch_size), LongTensor
-            _, pred = outputs.max(1)
-            # inputs : (batch_size, emb_size)
-            inputs = self.emb(pred)
-            inputs = inputs.unsqueeze(1)
-        # sampled : (batch_size, vocab_size, max_seqlen)
-        sampled = torch.stack(outputlist, 2)
-        return sampled
+    def sample(self, image):
+        bs = image.size(0)
+        # (bs x 512) -> (bs x emb_dim)
+        feature = self.linear1(image)
+        # hn: (bs x memory_dim)
+        hn, cn = self.rnn(feature)
+        # on: (bs x vocab_size)
+        on = self.linear2(self.dropout(hn))
+        out = [on]
+        # xn: (bs x emb_dim)
+        xn = self.emb(on.argmax(dim=1))
+        for step in range(self.max_seqlen-1):
+            # hn: (bs x memory_dim)
+            hn, cn = self.rnn(xn, (hn, cn))
+            # on: (bs x vocab_size)
+            on = self.linear2(hn)
+            # xn: (bs x emb_dim)
+            xn = self.emb(on.argmax(dim=1))
+            out.append(on)
+        # out: (bs x vocab_size x max_seqlen)
+        out = torch.stack(out, dim=-1).max(dim=1)[0]
+        return out
 
 
 class Attention(nn.Module):

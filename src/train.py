@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.optim as optim
@@ -39,20 +40,21 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device):
         image = data["image"]
         caption = data["caption"]
         length = data["length"]
+        idx = torch.randint(5, size=(1, caption.size(1), 1))
+        caption = torch.gather(caption, 1, idx.expand_as(caption))[:, 0, :]
+        length = torch.gather(caption, 1, idx.squeeze(-1).expand_as(length))[:, 0]
         image.to(device)
         caption.to(device)
         length.to(device)
 
         optimizer.zero_grad()
-        print(image.size())
         encoded = encoder(image)
-        print(encoded.size())
         decoded = decoder(encoded, caption, length)
         loss = criterion(decoded, caption)
         loss.backward()
         optimizer.step()
-        if it % 100 == 99:
-            print("iter {} / {} \t nll loss: {}".format(it+1, len(train_iterator), loss.item()), flush=True)
+        if it % 1 == 0:
+            print("iter {:06d} / {:06d} \t nll loss: {:.5f}".format(it+1, len(train_iterator), loss.item()), flush=True)
 
 """
 Validates and computes NLP metrics
@@ -65,6 +67,8 @@ Args:
     device:             CPU or GPU
 """
 def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
+    gt_list = []
+    ans_list = []
     for it, data in enumerate(val_iterator):
         image = data["image"]
         raw_caption = data["caption"]
@@ -76,7 +80,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
 
         gt_list.extend(raw_caption)
         ans_list.extend(generated)
-        if it % 100 == 99:
+        if it % 1 == 0:
             print("iter {} / {}".format(it+1, len(val_iterator)), flush=True)
     print("---METRICS---", flush=True)
     try:
@@ -120,13 +124,16 @@ if __name__ == "__main__":
 
     print("loading models...")
     encoder = ImageEncoder(cnn_type=CONFIG.cnn_arch, pool=True, pretrained=True)
-    decoder = SimpleDecoder(emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
+    decoder = SimpleDecoder(feature_dim=CONFIG.feature_dim, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob)
     params = list(encoder.parameters()) + list(decoder.parameters())
     optimizer = optim.Adam(params, lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
+    print("done!")
+    print("loading evaluator...")
     # uses ~6G RAM!!
     evaluator = NLGEval()
+    print("done!")
 
     for ep in range(CONFIG.max_epoch):
         print("begin training for epoch {}".format(ep+1))

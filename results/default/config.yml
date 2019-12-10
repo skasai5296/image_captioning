@@ -1,7 +1,7 @@
 config_name: default
 
 # path related
-data_path: /groups1/gaa50131/datasets/MSCOCO
+data_path: /home/seito/hdd/dsets/coco
 caption_file_path: annotations/captions_train2017.txt
 
 max_epoch: 10
@@ -13,8 +13,12 @@ batch_size: 64
 lr: 0.001
 beta1: 0.9
 beta2: 0.999
+# cnn architecture, choose from 
+# 'resnet[18|34|50|101|152]', 'resnext50_32x4d', 'resnext101_32x8d', 'wide_resnet[50|101]_2'
 cnn_arch: resnet50
 
+# depends on cnn architecture!!
+feature_dim: 2048
 emb_dim: 300
 memory_dim: 512
 dropout_p: 0

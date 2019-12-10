@@ -42,7 +42,7 @@ class BasicTokenizer():
     Args:
         sentence_batch:     list of str or str; captions put together in a list
     Returns:
-        out:                torch.Tensor;       (batch_size x max_len)
+        out:                torch.Tensor;       (max_len) if input is string, (batch_size x max_len) if list
     """
     def encode(self, sentence):
         assert isinstance(sentence, list) or isinstance(sentence, str)
@@ -65,7 +65,9 @@ class BasicTokenizer():
     def decode(self, ten):
         assert isinstance(ten, torch.Tensor)
         assert ten.dtype == torch.long
-        assert ten.dim() == 2
+        assert ten.dim() in (1, 2)
+        if ten.dim() == 1:
+            ten = ten.unsqueeze(0)
         length = ten.ne(self.padidx).sum(dim=1)
         ten = ten.tolist()
         out = []
@@ -95,17 +97,22 @@ def cococap2txt(jsonfile: str, dst: str):
 
 # for debugging
 if __name__ == '__main__':
-    file = "/groups1/gaa50131/datasets/MSCOCO/annotations/captions_train2017.json"
-    dest = "/groups1/gaa50131/datasets/MSCOCO/annotations/captions_train2017.txt"
+    root = "/home/seito/hdd/dsets/coco"
+    file = os.path.join(root, "annotations/captions_train2017.json")
+    dest = os.path.join(root, "annotations/captions_train2017.txt")
     # first time only
     if not os.path.exists(dest):
         cococap2txt(file, dest)
     tokenizer = BasicTokenizer(min_freq=5, max_len=30)
     tokenizer.from_textfile(dest)
+
     sentence1 = ["hello world this is my friend Alex.", "the cat and the rat sat on a mat."]
-    sentence2 = "hello world this is my friend Alex."
     ten = tokenizer.encode(sentence1)
     print(ten)
+    sent = tokenizer.decode(ten)
+    print(sent)
+
+    sentence2 = "hello world this is my friend Alex."
     ten = tokenizer.encode(sentence2)
     print(ten)
     sent = tokenizer.decode(ten)
