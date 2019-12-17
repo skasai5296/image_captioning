@@ -27,14 +27,12 @@ class BasicTokenizer():
         textfile:   str;    path to textfile containing vocabulary
     """
     def from_textfile(self, textfile):
-        print("loading vocabulary from {} ...".format(textfile))
         with open(textfile, 'r') as f:
             sentences = f.readlines()
         sent_proc = list(map(self.field.preprocess, sentences))
         self.field.build_vocab(sent_proc, min_freq=self.min_freq)
         self.len = len(self.field.vocab)
         self.padidx = self.field.vocab.stoi["<pad>"]
-        print("done!")
 
     """
     Tokenize and numericalize a single or batched sentence.

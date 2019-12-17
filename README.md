@@ -9,7 +9,7 @@ work is still in progress
 ## Setup
 - Run `conda env create --file environment.yml && conda activate captioning` if you are a conda user
 - Run `python -m spacy download en`
-- Install `nlg-eval` (instructions [here](https://github.com/Maluuba/nlg-eval/README.md))
+- Install `nlg-eval` (instructions [here](https://github.com/Maluuba/nlg-eval/blob/master/README.md))
 
 ## TODO
 - [x] Implement dataset loading for MSCOCO

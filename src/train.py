@@ -4,6 +4,7 @@ import torch
 import shutil
 import argparse
 from pprint import pprint
+import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,7 +35,7 @@ Args:
     criterion:          Loss function
     device:             CPU or GPU
 """
-def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, logger, ep):
+def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
     for it, data in enumerate(train_iterator):
         image = data["image"]
@@ -53,9 +54,9 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
         loss = criterion(decoded, caption)
         loss.backward()
         optimizer.step()
-        logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
+        tb_logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
         if it % 10 == 9:
-            print("epoch {} | iter {} / {} done".format(epoch_timer, it+1, len(train_iterator)))
+            logging.info("epoch {} | iter {} / {} done".format(epoch_timer, it+1, len(train_iterator)))
 
 """
 Validates and computes NLP metrics
@@ -83,16 +84,16 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         gt_list.extend(raw_caption)
         ans_list.extend(generated)
         if it % 10 == 9:
-            print("validation {} | iter {} / {} done".format(val_timer, it+1, len(val_iterator)))
-    print("---METRICS---")
+            logging.info("validation {} | iter {} / {} done".format(val_timer, it+1, len(val_iterator)))
+    logging.info("---METRICS---")
     try:
         metrics = evaluator.compute_metrics(ref_list=[gt_list], hyp_list=ans_list)
         for k, v in metrics.items():
-            print("{}:\t\t{}".format(k, v))
+            logging.info("{}:\t\t{}".format(k, v))
     except:
         metrics = {}
-        print("could not evaluate, some sort of error in NLGEval")
-    print("---METRICS---")
+        logging.error("could not evaluate, some sort of error in NLGEval")
+    logging.info("---METRICS---")
     return metrics
 
 
@@ -103,15 +104,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='../results/default/config.yml')
     parser.add_argument('--resume', action="store_true", help='denotes if to continue training, will use config')
+    parser.add_argument('--loglevel', type=str, default="debug", help='denotes log level, should be one of [debug|info|warning|error|critical]')
     opt = parser.parse_args()
     CONFIG = Dict(yaml.safe_load(open(opt.config)))
-    print("CONFIGURATIONS:")
-    pprint(CONFIG)
 
-    logger = SummaryWriter(log_dir=CONFIG.log_dir)
+    numeric_level = getattr(logging, opt.loglevel.upper())
+    if not isinstance(numeric_level, int):
+        raise ValueError("Invalid log level: {}".format(numeric_level))
+    logdir = os.path.join(CONFIG.result_dir, CONFIG.config_name)
+    if not os.path.exists(logdir):
+        os.makedirs(logdir)
+    logging.basicConfig(filename=os.path.join(logdir, "{}.log".format(opt.loglevel.lower())), level=numeric_level)
 
+    tb_logdir = os.path.join(CONFIG.log_dir, CONFIG.config_name)
+    if not os.path.exists(tb_logdir):
+        os.makedirs(tb_logdir)
+    tb_logger = SummaryWriter(log_dir=tb_logdir)
+
+    logging.info("Initializing tokenizer and loading vocabulary from {} ...".format(os.path.join(CONFIG.data_path, CONFIG.caption_file_path)))
     tokenizer = BasicTokenizer(min_freq=CONFIG.min_freq, max_len=CONFIG.max_len)
     tokenizer.from_textfile(os.path.join(CONFIG.data_path, CONFIG.caption_file_path))
+    logging.info("done!")
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -120,34 +133,36 @@ if __name__ == "__main__":
                              std=[0.229, 0.224, 0.225])
     ])
 
+    logging.info("Initializing Dataset")
     train_dset = CocoDataset(CONFIG.data_path, mode="train", tokenizer=tokenizer, transform=transform)
     train_loader = DataLoader(train_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker)
     val_dset = CocoDataset(CONFIG.data_path, mode="val", tokenizer=tokenizer, transform=transform)
     val_loader = DataLoader(val_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker)
+    logging.info("done!")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print("loading models...")
+    logging.info("loading models...")
     encoder = ImageEncoder(cnn_type=CONFIG.cnn_arch, pool=True, pretrained=True)
     decoder = SimpleDecoder(feature_dim=CONFIG.feature_dim, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob)
     params = list(encoder.parameters()) + list(decoder.parameters())
     optimizer = optim.Adam(params, lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
-    print("done!")
-    print("loading evaluator...")
+    logging.info("done!")
+    logging.info("loading evaluator...")
     # uses ~6G RAM!!
     evaluator = NLGEval()
-    print("done!")
+    logging.info("done!")
 
     for ep in range(CONFIG.max_epoch):
-        print("global {} | begin training for epoch {}".format(global_timer, ep+1))
-        train_epoch(train_loader, encoder, decoder, optimizer, criterion, device, logger, ep)
-        print("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
+        logging.info("global {} | begin training for epoch {}".format(global_timer, ep+1))
+        train_epoch(train_loader, encoder, decoder, optimizer, criterion, device, tb_logger, ep)
+        logging.info("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
         metrics = validate(val_loader, encoder, decoder, tokenizer, evaluator, device)
         for key, val in metrics.items():
-            logger.add_scalar("metrics/{}".format(key), val, ep+1)
-        print("global {} | end epoch {}".format(global_timer, ep+1))
-    print("done training!!")
+            tb_logger.add_scalar("metrics/{}".format(key), val, ep+1)
+        logging.info("global {} | end epoch {}".format(global_timer, ep+1))
+    logging.info("done training!!")
 
 
 
