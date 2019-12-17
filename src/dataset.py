@@ -1,7 +1,7 @@
 import os
+import logging
 
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -9,6 +9,13 @@ import torchvision.transforms as transforms
 from pycocotools.coco import COCO
 
 from vocab import BasicTokenizer
+
+try:
+    from accimage import Image
+    torchvision.set_image_backend("accimage")
+except:
+    logging.error("failed to load accimage, falling back to PIL")
+    from PIL import Image
 
 class CocoDataset(Dataset):
     """
