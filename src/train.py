@@ -56,7 +56,7 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
         optimizer.step()
         tb_logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
         if it % 10 == 9:
-            logging.info("epoch {} | iter {} / {} done".format(epoch_timer, it+1, len(train_iterator)))
+            logging.info("epoch {} | iter {} / {} | loss: {}".format(epoch_timer, it+1, len(train_iterator), loss.item()))
 
 """
 Validates and computes NLP metrics
@@ -84,7 +84,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         gt_list.extend(raw_caption)
         ans_list.extend(generated)
         if it % 10 == 9:
-            logging.info("validation {} | iter {} / {} done".format(val_timer, it+1, len(val_iterator)))
+            logging.info("validation {} | iter {} / {}".format(val_timer, it+1, len(val_iterator)))
     logging.info("---METRICS---")
     try:
         metrics = evaluator.compute_metrics(ref_list=[gt_list], hyp_list=ans_list)
