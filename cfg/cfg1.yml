@@ -1,4 +1,4 @@
-config_name: worker0
+config_name: lr_1e-4
 
 # path related
 data_path: /groups1/gaa50131/datasets/MSCOCO
@@ -7,7 +7,7 @@ log_dir: ../log
 result_dir: ../out
 
 max_epoch: 10
-num_worker: 0
+num_worker: 16
 
 min_freq: 5
 max_len: 30

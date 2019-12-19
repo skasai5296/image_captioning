@@ -5,17 +5,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+import torchvision
 import torchvision.transforms as transforms
 from pycocotools.coco import COCO
 
 from vocab import BasicTokenizer
 
-try:
-    from accimage import Image
-    torchvision.set_image_backend("accimage")
-except:
-    logging.error("failed to load accimage, falling back to PIL")
-    from PIL import Image
+import accimage
+torchvision.set_image_backend("accimage")
+from PIL import Image
 
 class CocoDataset(Dataset):
     """
@@ -40,8 +38,8 @@ class CocoDataset(Dataset):
         {
             img_id:         image id;                   int
             image:          tensor representing image;  likely torch.Tensor (3 x 224 x 224) after transform
-            raw_caption:    raw captions;               str
-            caption:        index of encoded tokens;    torch.Tensor (5)
+            raw_caption:    raw captions;               list of str
+            caption:        index of encoded tokens;    torch.Tensor (5 x max_seqlen)
             length:         lengths of captions;        torch.Tensor (5)
         }
     """
@@ -51,7 +49,7 @@ class CocoDataset(Dataset):
         path = self.coco.loadImgs(img_id)[0]['file_name']
 
         raw_caption = [obj['caption'] for obj in self.coco.loadAnns(ann_id)]
-        image = Image.open(os.path.join(self.img_path, path)).convert('RGB')
+        image = accimage.Image(os.path.join(self.img_path, path))
         if self.transform is not None:
             image = self.transform(image)
         caption = self.tokenizer.encode(raw_caption)
@@ -62,13 +60,61 @@ class CocoDataset(Dataset):
     def __len__(self):
         return len(self.img_ids)
 
+"""
+Returns:
+    {
+        img_id:         image id;                   list of int
+        image:          tensor representing image;  torch.Tensor (N x 3 x 224 x 224)
+        raw_caption:    raw captions;               list of str
+        caption:        index of encoded tokens;    torch.Tensor (N x max_seqlen)
+        length:         lengths of captions;        torch.Tensor (N)
+    }
+"""
 def train_collater(data):
+    img_id = []
+    image = []
+    raw_caption = []
+    caption = []
+    length = []
     for x in data:
-        img_id = x["img_id"]
-        image = x["image"]
-        raw_caption = x["raw_caption"]
-        caption = x["caption"]
-        length = x["length"]
+        idx = np.random.randint(len(x["raw_caption"]))
+        img_id.append(x["img_id"])
+        image.append(x["image"])
+        raw_caption.append(x["raw_caption"][idx])
+        caption.append(x["caption"][idx])
+        length.append(x["length"][idx])
+    image = torch.stack(image)
+    caption = torch.stack(caption)
+    length = torch.stack(length)
+    return {"img_id": img_id, "image": image, "raw_caption": raw_caption, "caption": caption, "length": length}
+
+"""
+Returns:
+    {
+        img_id:         image id;                   list of int
+        image:          tensor representing image;  torch.Tensor (N x 3 x 224 x 224)
+        raw_caption:    raw captions;               list of list of str
+        caption:        index of encoded tokens;    torch.Tensor (N x 5 x max_seqlen)
+        length:         lengths of captions;        torch.Tensor (N x 5)
+    }
+"""
+def val_collater(data):
+    img_id = []
+    image = []
+    raw_caption = []
+    caption = []
+    length = []
+    for x in data:
+        img_id.append(x["img_id"])
+        image.append(x["image"])
+        raw_caption.append(x["raw_caption"])
+        caption.append(x["caption"])
+        length.append(x["length"])
+    image = torch.stack(image)
+    caption = torch.stack(caption)
+    length = torch.stack(length)
+    return {"img_id": img_id, "image": image, "raw_caption": raw_caption, "caption": caption, "length": length}
+
 
 
 # for debugging

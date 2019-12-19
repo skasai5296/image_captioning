@@ -10,6 +10,22 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence
 import torch.nn.init as init
 import torch.nn.functional as F
+from nltk.translate.bleu_score import corpus_bleu
+
+class BleuComputer():
+    def __init__(self, n=4):
+        self.n = n
+
+    def compute_metrics(self, ref_list, hyp_list):
+        ref_list = [[sentence.split() for sentence in batch] for batch in ref_list]
+        hyp_list = [sentence.split() for sentence in hyp_list]
+        out = {}
+        for i in range(self.n):
+            weights = [0, 0, 0, 0]
+            weights[i] = 1
+            out["BLEU-{}".format(i+1)] = corpus_bleu(ref_list, hyp_list, weights)
+        return out
+
 
 class Logger():
 

@@ -1,4 +1,4 @@
-config_name: worker16
+config_name: lr_1e-3
 
 # path related
 data_path: /groups1/gaa50131/datasets/MSCOCO

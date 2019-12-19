@@ -16,13 +16,13 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.optim as optim
 import torchvision.transforms as transforms
-from nlgeval import NLGEval
+#from nlgeval import NLGEval
 import yaml
 from addict import Dict
 
-from dataset import CocoDataset
+from dataset import CocoDataset, train_collater, val_collater
 from vocab import BasicTokenizer
-from utils import Logger, AverageMeter, Timer
+from utils import Logger, AverageMeter, Timer, BleuComputer
 from model import ImageEncoder, SimpleDecoder
 
 """
@@ -41,9 +41,7 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
         image = data["image"]
         caption = data["caption"]
         length = data["length"]
-        idx = torch.randint(5, size=(1, caption.size(1), 1))
-        caption = torch.gather(caption, 1, idx.expand_as(caption))[:, 0, :]
-        length = torch.gather(caption, 1, idx.squeeze(-1).expand_as(length))[:, 0]
+        # get random caption
         image.to(device)
         caption.to(device)
         length.to(device)
@@ -74,7 +72,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
     val_timer = Timer()
     for it, data in enumerate(val_iterator):
         image = data["image"]
-        raw_caption = data["caption"]
+        raw_caption = data["raw_caption"]
         image.to(device)
 
         encoded = encoder(image)
@@ -86,13 +84,9 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         if it % 10 == 9:
             logging.info("validation {} | iter {} / {}".format(val_timer, it+1, len(val_iterator)))
     logging.info("---METRICS---")
-    try:
-        metrics = evaluator.compute_metrics(ref_list=[gt_list], hyp_list=ans_list)
-        for k, v in metrics.items():
-            logging.info("{}:\t\t{}".format(k, v))
-    except:
-        metrics = {}
-        logging.error("could not evaluate, some sort of error in NLGEval")
+    metrics = evaluator.compute_metrics(ref_list=gt_list, hyp_list=ans_list)
+    for k, v in metrics.items():
+        logging.info("{}:\t\t{}".format(k, v))
     logging.info("---METRICS---")
     return metrics
 
@@ -102,7 +96,7 @@ if __name__ == "__main__":
     global_timer = Timer()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='../results/default/config.yml')
+    parser.add_argument('--config', type=str, required=True, help='path to configuration yml file')
     parser.add_argument('--resume', action="store_true", help='denotes if to continue training, will use config')
     parser.add_argument('--loglevel', type=str, default="debug", help='denotes log level, should be one of [debug|info|warning|error|critical]')
     opt = parser.parse_args()
@@ -135,23 +129,30 @@ if __name__ == "__main__":
 
     logging.info("Initializing Dataset")
     train_dset = CocoDataset(CONFIG.data_path, mode="train", tokenizer=tokenizer, transform=transform)
-    train_loader = DataLoader(train_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker)
+    train_loader = DataLoader(train_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker, pin_memory=True, collate_fn=train_collater)
     val_dset = CocoDataset(CONFIG.data_path, mode="val", tokenizer=tokenizer, transform=transform)
-    val_loader = DataLoader(val_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker)
+    val_loader = DataLoader(val_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker, pin_memory=True, collate_fn=val_collater)
     logging.info("done!")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available:
+        device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
+        logging.info("using GPU")
+    else:
+        device = torch.device("cpu")
+        logging.info("using CPU")
 
     logging.info("loading models...")
     encoder = ImageEncoder(cnn_type=CONFIG.cnn_arch, pool=True, pretrained=True)
     decoder = SimpleDecoder(feature_dim=CONFIG.feature_dim, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob)
     params = list(encoder.parameters()) + list(decoder.parameters())
-    optimizer = optim.Adam(params, lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
+    optimizer = optim.Adam(decoder.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
     logging.info("done!")
     logging.info("loading evaluator...")
     # uses ~6G RAM!!
-    evaluator = NLGEval()
+    # evaluator = NLGEval()
+    evaluator = BleuComputer()
     logging.info("done!")
 
     for ep in range(CONFIG.max_epoch):
