@@ -1,7 +1,7 @@
 config_name: lr_1e-3
 
 # path related
-data_path: /groups1/gaa50131/datasets/MSCOCO
+data_path: /home/seito/hdd/dsets/coco
 caption_file_path: annotations/captions_train2017.txt
 log_dir: ../log
 result_dir: ../out
