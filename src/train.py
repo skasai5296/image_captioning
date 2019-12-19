@@ -53,7 +53,7 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
         loss.backward()
         optimizer.step()
         tb_logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
-        if it % 10 == 9:
+        if it % 1 == 0:
             logging.info("epoch {} | iter {} / {} | loss: {}".format(epoch_timer, it+1, len(train_iterator), loss.item()))
 
 """
@@ -135,7 +135,6 @@ if __name__ == "__main__":
     logging.info("done!")
     if torch.cuda.is_available:
         device = torch.device("cuda")
-        torch.backends.cudnn.benchmark = True
         logging.info("using GPU")
     else:
         device = torch.device("cpu")
@@ -145,7 +144,6 @@ if __name__ == "__main__":
     encoder = ImageEncoder(cnn_type=CONFIG.cnn_arch, pool=True, pretrained=True)
     decoder = SimpleDecoder(feature_dim=CONFIG.feature_dim, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob)
-    params = list(encoder.parameters()) + list(decoder.parameters())
     optimizer = optim.Adam(decoder.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
     logging.info("done!")
