@@ -33,6 +33,7 @@ class BasicTokenizer():
         self.field.build_vocab(sent_proc, min_freq=self.min_freq)
         self.len = len(self.field.vocab)
         self.padidx = self.field.vocab.stoi["<pad>"]
+        self.bosidx = self.field.vocab.stoi["<bos>"]
 
     """
     Tokenize and numericalize a single or batched sentence.

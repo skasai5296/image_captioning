@@ -16,26 +16,25 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.optim as optim
 import torchvision.transforms as transforms
-#from nlgeval import NLGEval
 import yaml
 from addict import Dict
 
 from dataset import CocoDataset, train_collater, val_collater
 from vocab import BasicTokenizer
 from utils import Logger, AverageMeter, Timer, BleuComputer
-from model import ImageEncoder, SimpleDecoder
+from simp_decoder import Captioning_Simple
+from attn_decoder import Captioning_Attention
 
 """
 Train for a single epoch.
 Args:
     train_iterator:     DataLoader for training
-    encoder:            Image encoder
-    decoder:            Caption decoder
+    model:              Captioning model
     optimizer:          Optimizer
     criterion:          Loss function
     device:             CPU or GPU
 """
-def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, tb_logger, ep):
+def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
     for it, data in enumerate(train_iterator):
         image = data["image"]
@@ -47,9 +46,8 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
         length.to(device)
 
         optimizer.zero_grad()
-        encoded = encoder(image)
-        decoded = decoder(encoded, caption, length)
-        loss = criterion(decoded, caption)
+        decoded = model(image, caption, length)
+        loss = criterion(decoded, caption[:, :-1])
         loss.backward()
         optimizer.step()
         tb_logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
@@ -60,13 +58,12 @@ def train_epoch(train_iterator, encoder, decoder, optimizer, criterion, device, 
 Validates and computes NLP metrics
 Args:
     val_iterator:       DataLoader for validation
-    encoder:            Image encoder
-    decoder:            Caption decoder
+    model:              Captioning model
     tokenizer:          Tokenizer
     evaluator:          NLGEval instance for computing metrics
     device:             CPU or GPU
 """
-def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
+def validate(val_iterator, model, tokenizer, evaluator, device):
     gt_list = []
     ans_list = []
     val_timer = Timer()
@@ -75,8 +72,7 @@ def validate(val_iterator, encoder, decoder, tokenizer, evaluator, device):
         raw_caption = data["raw_caption"]
         image.to(device)
 
-        encoded = encoder(image)
-        decoded = decoder.sample(encoded)
+        decoded = model.sample(image)
         generated = tokenizer.decode(decoded)
 
         gt_list.extend(raw_caption)
@@ -140,24 +136,25 @@ if __name__ == "__main__":
         device = torch.device("cpu")
         logging.info("using CPU")
 
-    logging.info("loading models...")
-    encoder = ImageEncoder(cnn_type=CONFIG.cnn_arch, pool=True, pretrained=True)
-    decoder = SimpleDecoder(feature_dim=CONFIG.feature_dim, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
-            vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob)
-    optimizer = optim.Adam(decoder.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
+    logging.info("loading model...")
+    if CONFIG.attention:
+        model = Captioning_Attention(cnn_type=CONFIG.cnn_arch, pretrained=True, spatial_size=CONFIG.spatial_size, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
+            vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob, bos_idx=tokenizer.bosidx)
+    else:
+        model = Captioning_Simple(cnn_type=CONFIG.cnn_arch, pretrained=True, spatial_size=CONFIG.spatial_size, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
+            vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob, bos_idx=tokenizer.bosidx)
+    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
     logging.info("done!")
     logging.info("loading evaluator...")
-    # uses ~6G RAM!!
-    # evaluator = NLGEval()
     evaluator = BleuComputer()
     logging.info("done!")
 
     for ep in range(CONFIG.max_epoch):
         logging.info("global {} | begin training for epoch {}".format(global_timer, ep+1))
-        train_epoch(train_loader, encoder, decoder, optimizer, criterion, device, tb_logger, ep)
+        train_epoch(train_loader, model, optimizer, criterion, device, tb_logger, ep)
         logging.info("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
-        metrics = validate(val_loader, encoder, decoder, tokenizer, evaluator, device)
+        metrics = validate(val_loader, model, tokenizer, evaluator, device)
         for key, val in metrics.items():
             tb_logger.add_scalar("metrics/{}".format(key), val, ep+1)
         logging.info("global {} | end epoch {}".format(global_timer, ep+1))

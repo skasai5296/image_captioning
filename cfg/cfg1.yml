@@ -1,4 +1,4 @@
-config_name: lr_1e-4
+config_name: noattention
 
 # path related
 data_path: /home/seito/hdd/dsets/coco
@@ -6,7 +6,7 @@ caption_file_path: annotations/captions_train2017.txt
 log_dir: ../log
 result_dir: ../out
 
-max_epoch: 10
+max_epoch: 5
 num_worker: 4
 
 min_freq: 5
@@ -18,9 +18,9 @@ beta2: 0.999
 # cnn architecture, choose from 
 # 'resnet[18|34|50|101|152]', 'resnext50_32x4d', 'resnext101_32x8d', 'wide_resnet[50|101]_2'
 cnn_arch: resnet50
+attention: False
 
-# depends on cnn architecture!!
-feature_dim: 2048
+spatial_size: 7
 emb_dim: 300
 memory_dim: 512
 dropout_p: 0
