@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
     for ep in range(CONFIG.max_epoch):
         logging.info("global {} | begin training for epoch {}".format(global_timer, ep+1))
-        #train_epoch(train_loader, model, optimizer, criterion, device, tb_logger, ep)
+        train_epoch(train_loader, model, optimizer, criterion, device, tb_logger, ep)
         logging.info("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
         metrics = validate(val_loader, model, tokenizer, evaluator, device)
         for key, val in metrics.items():
