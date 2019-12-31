@@ -3,6 +3,7 @@ import time
 import random
 import csv
 from pathlib import Path
+import logging
 
 import numpy as np
 import torch
@@ -25,6 +26,32 @@ class BleuComputer():
             weights[i] = 1
             out["BLEU-{}".format(i+1)] = corpus_bleu(ref_list, hyp_list, weights)
         return out
+
+class ModelSaver():
+    def __init__(self, path, init_val=0):
+        self.path = path
+        self.best = init_val
+
+    def load_ckpt(self, model, optimizer):
+        if os.path.exists(self.path):
+            logging.info(f"loading model from {self.path}")
+            model.load_state_dict(torch.load(self.path), map_location="cpu")
+        else:
+            logging.error(f"{self.path} does not exist, not loading")
+
+    def save_ckpt_if_best(self, model, optimizer, metric):
+        if metric > self.best:
+            logging.info(f"score {metric} is better than previous best score of {self.best}, saving to {self.path}")
+            save = { "optimizer": optimizer.state_dict() }
+            if hasattr(model, "module"):
+                save["model"] = model.module.state_dict()
+                torch.save(save, self.path)
+            else:
+                save["model"] = model.state_dict()
+                torch.save(save, self.path)
+            self.best = metric
+        else:
+            logging.info(f"score {metric} is not better than previous best score of {self.best}, not saving")
 
 
 class Logger():

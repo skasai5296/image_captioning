@@ -38,7 +38,7 @@ class ImageEncoder(nn.Module):
         bs = image.size(0)
         feature = self.cnn(image)
         feature = self.pool(feature)
-        return feature.view(bs, self.out_size, -1).transpose(1, 2)
+        return feature.reshape(bs, self.out_size, -1).transpose(1, 2)
 
 
 class Attention(nn.Module):
@@ -138,8 +138,8 @@ class AttentionDecoder(nn.Module):
     def sample(self, feature):
         bs = feature.size(0)
         # hn, cn: (bs x memory_dim)
-        hn = self.init_h(feature.view(bs, -1))
-        cn = self.init_c(feature.view(bs, -1))
+        hn = self.init_h(feature.reshape(bs, -1))
+        cn = self.init_c(feature.reshape(bs, -1))
         # xn: (bs x emb_dim)
         xn = self.emb(torch.full((bs,), self.bos_idx, dtype=torch.long, device=feature.device))
         out = []
@@ -166,9 +166,11 @@ class Captioning_Attention(nn.Module):
         self.rnn = AttentionDecoder(feature_dim, spatial_size, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob, bos_idx)
 
     def forward(self, image, caption, length):
-        return self.rnn(self.cnn(image), caption, length)
+        feature = self.cnn(image)
+        return self.rnn(feature, caption, length)
 
     def sample(self, image):
-        return self.rnn.sample(self.cnn(image))
+        feature = self.cnn(image)
+        return self.rnn.sample(feature)
 
 
