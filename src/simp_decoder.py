@@ -38,7 +38,7 @@ class ImageEncoder(nn.Module):
         bs = image.size(0)
         feature = self.cnn(image)
         feature = self.pool(feature)
-        return feature.view(bs, self.out_size, -1).transpose(1, 2)
+        return feature.reshape(bs, self.out_size, -1).transpose(1, 2)
 
 """
 RNN decoder for captioning, Google NIC
@@ -104,8 +104,8 @@ class SimpleDecoder(nn.Module):
     def sample(self, feature):
         bs = feature.size(0)
         # hn, cn: (bs x memory_dim)
-        hn = self.init_h(feature.view(bs, -1))
-        cn = self.init_c(feature.view(bs, -1))
+        hn = self.init_h(feature.reshape(bs, -1))
+        cn = self.init_c(feature.reshape(bs, -1))
         # xn: (bs x emb_dim)
         xn = self.emb(torch.full((bs,), self.bos_idx, dtype=torch.long, device=feature.device))
         out = []
