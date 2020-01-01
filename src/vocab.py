@@ -67,10 +67,9 @@ class BasicTokenizer():
         assert ten.dim() in (1, 2)
         if ten.dim() == 1:
             ten = ten.unsqueeze(0)
-        length = ten.ne(self.padidx).sum(dim=1)
         ten = ten.tolist()
         out = []
-        for n, idxs in zip(length, ten):
+        for idxs in ten:
             tokenlist = [self.field.vocab.itos[idx] for idx in idxs]
             out.append(" ".join(tokenlist))
         return out

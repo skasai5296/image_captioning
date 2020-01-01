@@ -39,31 +39,33 @@ Args:
 def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
     model.train()
+    # whether or not use doubly stochastic attention
+    dsflag = isinstance(model, Captioning_Attention)
+    losses = {}
+    lossstr = ""
     for it, data in enumerate(train_iterator):
         image = data["image"]
         caption = data["caption"]
         length = data["length"]
-        # get random caption
         image = image.to(device)
         caption = caption.to(device)
         length = length.to(device)
 
         optimizer.zero_grad()
-        celoss = 0
-        dsloss = 0
-        if isinstance(model, Captioning_Attention):
+        if dsflag:
             decoded, alphas = model(image, caption, length)
-            # doubly stochastic attention
-            dsloss += 1. * ((1. - alphas.sum(dim=2)) ** 2).mean()
-        elif isinstance(model, Captioning_Simple):
+            losses["DoublyStochasticLoss"] = ((1. - alphas.sum(dim=2)) ** 2).mean()
+        else:
             decoded = model(image, caption, length)
-        celoss += criterion(decoded, caption[:, 1:])
-        celoss.backward()
+        losses["NegativeLogLikelihoodLoss"] = criterion(decoded, caption[:, 1:])
+        for loss_name, loss in losses.items():
+            loss.backward()
+            tb_logger.add_scalar("loss/{}".format(loss_name), loss.item(), ep*len(train_iterator)+it)
+            lossstr += " {}: {} |".format(loss_name, loss.item())
         optimizer.step()
-        tb_logger.add_scalar("loss/Cross_Entropy_Loss", celoss.item(), ep*len(train_iterator)+it)
-        tb_logger.add_scalar("loss/Doubly_Stochastic_Attention", dsloss.item(), ep*len(train_iterator)+it)
+
         if it % 10 == 9:
-            logging.info("epoch {} | iter {} / {} | celoss: {} | dsloss: {}".format(epoch_timer, it+1, len(train_iterator), celoss.item(), dsloss.item()))
+            logging.info("epoch {} | iter {} / {} |{}".format(epoch_timer, it+1, len(train_iterator), lossstr))
 
 """
 Validates and computes NLP metrics
