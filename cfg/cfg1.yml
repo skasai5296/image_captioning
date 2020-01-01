@@ -6,7 +6,7 @@ caption_file_path: annotations/captions_train2017.txt
 log_dir: ../log
 result_dir: ../out
 
-max_epoch: 5
+max_epoch: 30
 num_worker: 4
 
 min_freq: 5
@@ -17,7 +17,7 @@ beta1: 0.9
 beta2: 0.999
 # cnn architecture, choose from 
 # 'resnet[18|34|50|101|152]', 'resnext50_32x4d', 'resnext101_32x8d', 'wide_resnet[50|101]_2'
-cnn_arch: resnet50
+cnn_arch: resnet101
 attention: False
 
 spatial_size: 7

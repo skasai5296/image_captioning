@@ -18,6 +18,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 import yaml
 from addict import Dict
+from nlgeval import NLGEval
 
 from dataset import CocoDataset, train_collater, val_collater
 from vocab import BasicTokenizer
@@ -74,7 +75,10 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         raw_caption = data["raw_caption"]
         image = image.to(device)
 
-        decoded = model.sample(image)
+        if torch.cuda.device_count() > 1:
+            decoded = model.module.sample(image)
+        else:
+            decoded = model.sample(image)
         decoded = torch.argmax(decoded, dim=1)
         generated = tokenizer.decode(decoded)
 
@@ -82,6 +86,9 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         ans_list.extend(generated)
         if it % 10 == 9:
             logging.info("validation {} | iter {} / {}".format(val_timer, it+1, len(val_iterator)))
+            logging.debug("sampled sentences")
+            logging.debug(raw_caption[:5])
+            logging.debug(generated[:5])
     logging.info("---METRICS---")
     metrics = evaluator.compute_metrics(ref_list=gt_list, hyp_list=ans_list)
     for k, v in metrics.items():
@@ -135,7 +142,7 @@ if __name__ == "__main__":
     logging.info("loading model...")
     if torch.cuda.is_available:
         device = torch.device("cuda")
-        logging.info("using GPU")
+        logging.info("using {} GPU(s)".format(torch.cuda.device_count()))
     else:
         device = torch.device("cpu")
         logging.info("using CPU")
@@ -152,6 +159,8 @@ if __name__ == "__main__":
         saver.load_ckpt(model, optimizer)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
     model = model.to(device)
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
     logging.info("done!")
 
     logging.info("loading evaluator...")

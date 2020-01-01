@@ -71,7 +71,7 @@ class BasicTokenizer():
         ten = ten.tolist()
         out = []
         for n, idxs in zip(length, ten):
-            tokenlist = [self.field.vocab.itos[idx] for idx in idxs[1:n-1]]
+            tokenlist = [self.field.vocab.itos[idx] for idx in idxs]
             out.append(" ".join(tokenlist))
         return out
 

@@ -35,7 +35,14 @@ class ModelSaver():
     def load_ckpt(self, model, optimizer):
         if os.path.exists(self.path):
             logging.info(f"loading model from {self.path}")
-            model.load_state_dict(torch.load(self.path), map_location="cpu")
+            ckpt = torch.load(self.path, map_location="cpu")
+            model.load_state_dict(ckpt["model"])
+            optimizer.load_state_dict(ckpt["optimizer"])
+            try:
+                self.best = ckpt["bestscore"]
+            except:
+                self.best = 0
+            logging.info(f"best score is set to {self.best}")
         else:
             logging.error(f"{self.path} does not exist, not loading")
 
@@ -45,11 +52,11 @@ class ModelSaver():
             save = { "optimizer": optimizer.state_dict() }
             if hasattr(model, "module"):
                 save["model"] = model.module.state_dict()
-                torch.save(save, self.path)
             else:
                 save["model"] = model.state_dict()
-                torch.save(save, self.path)
             self.best = metric
+            save["bestscore"] = self.best
+            torch.save(save, self.path)
         else:
             logging.info(f"score {metric} is not better than previous best score of {self.best}, not saving")
 
