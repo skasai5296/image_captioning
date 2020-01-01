@@ -53,10 +53,10 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
         optimizer.zero_grad()
         if dsflag:
             decoded, alphas = model(image, caption, length)
-            losses["DoublyStochasticLoss"] = ((1. - alphas.sum(dim=2)) ** 2).mean()
+            losses["DSLoss"] = ((1. - alphas.sum(dim=2)) ** 2).mean()
         else:
             decoded = model(image, caption, length)
-        losses["NegativeLogLikelihoodLoss"] = criterion(decoded, caption[:, 1:])
+        losses["NLLLoss"] = criterion(decoded, caption[:, 1:])
         lossstr = ""
         for loss_name, loss in losses.items():
             loss.backward()
