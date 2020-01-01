@@ -42,7 +42,6 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
     # whether or not use doubly stochastic attention
     dsflag = isinstance(model, Captioning_Attention)
     losses = {}
-    lossstr = ""
     for it, data in enumerate(train_iterator):
         image = data["image"]
         caption = data["caption"]
@@ -58,10 +57,11 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
         else:
             decoded = model(image, caption, length)
         losses["NegativeLogLikelihoodLoss"] = criterion(decoded, caption[:, 1:])
+        lossstr = ""
         for loss_name, loss in losses.items():
             loss.backward()
             tb_logger.add_scalar("loss/{}".format(loss_name), loss.item(), ep*len(train_iterator)+it)
-            lossstr += " {}: {} |".format(loss_name, loss.item())
+            lossstr += " {}: {:.6f} |".format(loss_name, loss.item())
         optimizer.step()
 
         if it % 10 == 9:
@@ -83,22 +83,18 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
     ans_list = []
     val_timer = Timer()
     model.eval()
+    m = model.module if hasattr(model, "module") else model
+    dsflag = isinstance(m, Captioning_Attention)
     for it, data in enumerate(val_iterator):
         image = data["image"]
         raw_caption = data["raw_caption"]
         image = image.to(device)
 
         with torch.no_grad():
-            if isinstance(model, Captioning_Attention):
-                if torch.cuda.device_count() > 1:
-                    decoded, _ = model.module.sample(image)
-                else:
-                    decoded, _ = model.sample(image)
-            elif isinstance(model, Captioning_Simple):
-                if torch.cuda.device_count() > 1:
-                    decoded = model.module.sample(image)
-                else:
-                    decoded = model.sample(image)
+            if dsflag:
+                decoded, _ = m.sample(image)
+            else:
+                decoded = m.sample(image)
             # TODO: implement beamsearch
             decoded = torch.argmax(decoded, dim=1)
         generated = tokenizer.decode(decoded)
@@ -107,10 +103,10 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         ans_list.extend(generated)
         if it % 10 == 9:
             logging.info("validation {} | iter {} / {}".format(val_timer, it+1, len(val_iterator)))
-            logging.debug("ground truths:")
-            logging.debug([c[0] for c in raw_caption[:5]])
-            logging.debug("sampled sentences:")
-            logging.debug(generated[:5])
+            gts = [c[0] for c in raw_caption[:5]]
+            hyps = generated[:5]
+            for gt, hyp in zip(gts, hyps):
+                logging.debug("ground truth: {}, sampled: {}".format(gt, hyp))
     logging.info("---METRICS---")
     metrics = evaluator.compute_metrics(ref_list=gt_list, hyp_list=ans_list)
     for k, v in metrics.items():

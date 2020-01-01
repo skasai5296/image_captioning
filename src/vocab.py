@@ -34,6 +34,7 @@ class BasicTokenizer():
         self.len = len(self.field.vocab)
         self.padidx = self.field.vocab.stoi["<pad>"]
         self.bosidx = self.field.vocab.stoi["<bos>"]
+        self.eosidx = self.field.vocab.stoi["<eos>"]
 
     """
     Tokenize and numericalize a single or batched sentence.
@@ -70,7 +71,11 @@ class BasicTokenizer():
         ten = ten.tolist()
         out = []
         for idxs in ten:
-            tokenlist = [self.field.vocab.itos[idx] for idx in idxs]
+            tokenlist = []
+            for idx in idxs:
+                if idx == self.eosidx:
+                    break
+                tokenlist.append(self.field.vocab.itos[idx])
             out.append(" ".join(tokenlist))
         return out
 

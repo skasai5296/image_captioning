@@ -31,6 +31,7 @@ class ModelSaver():
     def __init__(self, path, init_val=0):
         self.path = path
         self.best = init_val
+        self.epoch = 1
 
     def load_ckpt(self, model, optimizer):
         if os.path.exists(self.path):
@@ -38,11 +39,9 @@ class ModelSaver():
             ckpt = torch.load(self.path, map_location="cpu")
             model.load_state_dict(ckpt["model"])
             optimizer.load_state_dict(ckpt["optimizer"])
-            try:
-                self.best = ckpt["bestscore"]
-            except:
-                self.best = 0
-            logging.info(f"best score is set to {self.best}")
+            self.best = ckpt["bestscore"]
+            self.epoch = ckpt["epoch"] + 1
+            logging.info(f"best score is set to {self.best}, restarting from epoch {self.epoch}")
         else:
             logging.error(f"{self.path} does not exist, not loading")
 
@@ -55,10 +54,11 @@ class ModelSaver():
             else:
                 save["model"] = model.state_dict()
             self.best = metric
-            save["bestscore"] = self.best
+            save["epoch"] = self.epoch
             torch.save(save, self.path)
         else:
             logging.info(f"score {metric} is not better than previous best score of {self.best}, not saving")
+        self.epoch += 1
 
 
 class Logger():
