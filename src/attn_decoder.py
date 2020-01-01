@@ -85,6 +85,7 @@ Args:
 class AttentionDecoder(nn.Module):
     def __init__(self, feature_dim, spatial_size, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob, bos_idx):
         super().__init__()
+        self.spatial_size = spatial_size
         self.vocab_size = vocab_size
         self.max_seqlen = max_seqlen
         self.ss_prob = ss_prob
@@ -97,6 +98,8 @@ class AttentionDecoder(nn.Module):
         self.rnn = nn.LSTMCell(emb_dim + feature_dim, memory_dim)
         self.dropout = nn.Dropout(dropout_p)
         self.linear = nn.Linear(memory_dim, vocab_size)
+        self.f_beta = nn.Linear(memory_dim, 1)
+        self.sigmoid = nn.Sigmoid()
 
         self.init_h.apply(weight_init)
         self.init_c.apply(weight_init)
@@ -122,10 +125,13 @@ class AttentionDecoder(nn.Module):
         xn = caption[:, 0, :]
         # out: (bs x vocab_size x max_seqlen-1)
         out = torch.empty((bs, self.vocab_size, self.max_seqlen-1), device=feature.device)
+        # alphas: (bs x spatial_size*spatial_size x max_seqlen-1)
+        alphas = torch.empty((bs, self.spatial_size*self.spatial_size, self.max_seqlen-1), device=feature.device)
         for step in range(self.max_seqlen-1):
             # alpha: (bs x spatial_size*spatial_size)
             # weighted_feature: (bs x feature_dim)
             alpha, weighted_feature = self.attention(feature, hn)
+            alphas[:, :, step] = alpha
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(torch.cat([xn, weighted_feature], dim=1), (hn, cn))
             # on: (bs x vocab_size)
@@ -133,7 +139,7 @@ class AttentionDecoder(nn.Module):
             out[:, :, step] = on
             # xn: (bs x emb_dim)
             xn = self.emb(on.argmax(dim=1)) if np.random.uniform() < self.ss_prob else caption[:, step+1, :]
-        return out
+        return out, alphas
 
     def sample(self, feature):
         bs = feature.size(0)
@@ -144,10 +150,13 @@ class AttentionDecoder(nn.Module):
         xn = self.emb(torch.full((bs,), self.bos_idx, dtype=torch.long, device=feature.device))
         # out: (bs x vocab_size x max_seqlen-1)
         out = torch.empty((bs, self.vocab_size, self.max_seqlen-1), device=feature.device)
+        # alphas: (bs x spatial_size*spatial_size x max_seqlen-1)
+        alphas = torch.empty((bs, self.spatial_size*self.spatial_size, self.max_seqlen-1), device=feature.device)
         for step in range(self.max_seqlen-1):
             # alpha: (bs x spatial_size*spatial_size)
             # weighted_feature: (bs x feature_dim)
             alpha, weighted_feature = self.attention(feature, hn)
+            alphas[:, :, step] = alpha
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(torch.cat([xn, weighted_feature], dim=1), (hn, cn))
             # on: (bs x vocab_size)
@@ -155,7 +164,7 @@ class AttentionDecoder(nn.Module):
             out[:, :, step] = on
             # xn: (bs x emb_dim)
             xn = self.emb(on.argmax(dim=1))
-        return out
+        return out, alphas
 
 class Captioning_Attention(nn.Module):
     def __init__(self, cnn_type, pretrained, spatial_size, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob, bos_idx):

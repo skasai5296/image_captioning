@@ -49,13 +49,21 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
         length = length.to(device)
 
         optimizer.zero_grad()
-        decoded = model(image, caption, length)
-        loss = criterion(decoded, caption[:, :-1])
-        loss.backward()
+        celoss = 0
+        dsloss = 0
+        if isinstance(model, Captioning_Attention):
+            decoded, alphas = model(image, caption, length)
+            # doubly stochastic attention
+            dsloss += 1. * ((1. - alphas.sum(dim=2)) ** 2).mean()
+        elif isinstance(model, Captioning_Simple):
+            decoded = model(image, caption, length)
+        celoss += criterion(decoded, caption[:, 1:])
+        celoss.backward()
         optimizer.step()
-        tb_logger.add_scalar("loss/NLLLoss", loss.item(), ep*len(train_iterator)+it)
+        tb_logger.add_scalar("loss/Cross_Entropy_Loss", celoss.item(), ep*len(train_iterator)+it)
+        tb_logger.add_scalar("loss/Doubly_Stochastic_Attention", dsloss.item(), ep*len(train_iterator)+it)
         if it % 10 == 9:
-            logging.info("epoch {} | iter {} / {} | loss: {}".format(epoch_timer, it+1, len(train_iterator), loss.item()))
+            logging.info("epoch {} | iter {} / {} | celoss: {} | dsloss: {}".format(epoch_timer, it+1, len(train_iterator), celoss.item(), dsloss.item()))
 
 """
 Validates and computes NLP metrics
@@ -79,10 +87,16 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         image = image.to(device)
 
         with torch.no_grad():
-            if torch.cuda.device_count() > 1:
-                decoded = model.module.sample(image)
-            else:
-                decoded = model.sample(image)
+            if isinstance(model, Captioning_Attention):
+                if torch.cuda.device_count() > 1:
+                    decoded, _ = model.module.sample(image)
+                else:
+                    decoded, _ = model.sample(image)
+            elif isinstance(model, Captioning_Simple):
+                if torch.cuda.device_count() > 1:
+                    decoded = model.module.sample(image)
+                else:
+                    decoded = model.sample(image)
             # TODO: implement beamsearch
             decoded = torch.argmax(decoded, dim=1)
         generated = tokenizer.decode(decoded)
@@ -91,8 +105,9 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         ans_list.extend(generated)
         if it % 10 == 9:
             logging.info("validation {} | iter {} / {}".format(val_timer, it+1, len(val_iterator)))
-            logging.debug("sampled sentences")
-            logging.debug(raw_caption[:5])
+            logging.debug("ground truths:")
+            logging.debug([c[0] for c in raw_caption[:5]])
+            logging.debug("sampled sentences:")
             logging.debug(generated[:5])
     logging.info("---METRICS---")
     metrics = evaluator.compute_metrics(ref_list=gt_list, hyp_list=ans_list)
