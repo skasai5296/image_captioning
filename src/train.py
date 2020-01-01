@@ -34,6 +34,7 @@ Args:
     optimizer:          Optimizer
     criterion:          Loss function
     device:             CPU or GPU
+    tb_logger:          TensorBoard logger
 """
 def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
@@ -44,7 +45,7 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
         length = data["length"]
         # get random caption
         image = image.to(device)
-        caption =caption.to(device)
+        caption = caption.to(device)
         length = length.to(device)
 
         optimizer.zero_grad()
@@ -64,6 +65,8 @@ Args:
     tokenizer:          Tokenizer
     evaluator:          NLGEval instance for computing metrics
     device:             CPU or GPU
+    tb_logger:          TensorBoard logger
+    ep:                 epoch
 """
 def validate(val_iterator, model, tokenizer, evaluator, device):
     gt_list = []
@@ -75,11 +78,13 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
         raw_caption = data["raw_caption"]
         image = image.to(device)
 
-        if torch.cuda.device_count() > 1:
-            decoded = model.module.sample(image)
-        else:
-            decoded = model.sample(image)
-        decoded = torch.argmax(decoded, dim=1)
+        with torch.no_grad():
+            if torch.cuda.device_count() > 1:
+                decoded = model.module.sample(image)
+            else:
+                decoded = model.sample(image)
+            # TODO: implement beamsearch
+            decoded = torch.argmax(decoded, dim=1)
         generated = tokenizer.decode(decoded)
 
         gt_list.extend(raw_caption)
@@ -128,7 +133,9 @@ if __name__ == "__main__":
 
     logging.info("Initializing Dataset...")
     transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        transforms.Resize(256),
+        transforms.RandomCrop(224),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])

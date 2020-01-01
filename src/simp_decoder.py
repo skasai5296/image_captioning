@@ -55,6 +55,7 @@ Args:
 class SimpleDecoder(nn.Module):
     def __init__(self, feature_dim, spatial_size, emb_dim, memory_dim, vocab_size, max_seqlen, dropout_p, ss_prob, bos_idx):
         super().__init__()
+        self.vocab_size = vocab_size
         self.max_seqlen = max_seqlen
         self.ss_prob = ss_prob
         self.bos_idx = bos_idx
@@ -88,17 +89,16 @@ class SimpleDecoder(nn.Module):
         # caption: (bs x max_seqlen x emb_dim)
         caption = self.emb(caption)
         xn = caption[:, 0, :]
-        out = []
-        for step in range(1, self.max_seqlen):
+        # out: (bs x vocab_size x max_seqlen-1)
+        out = torch.empty((bs, self.vocab_size, self.max_seqlen-1), device=feature.device)
+        for step in range(self.max_seqlen-1):
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(xn, (hn, cn))
             # on: (bs x vocab_size)
             on = self.linear(self.dropout(hn))
-            out.append(on)
+            out[:, :, step] = on
             # xn: (bs x emb_dim)
-            xn = self.emb(on.argmax(dim=1)) if np.random.uniform() < self.ss_prob else caption[:, step, :]
-        # out: (bs x vocab_size x max_seqlen-1)
-        out = torch.stack(out, dim=-1)
+            xn = self.emb(on.argmax(dim=1)) if np.random.uniform() < self.ss_prob else caption[:, step+1, :]
         return out
 
     def sample(self, feature):
@@ -108,17 +108,16 @@ class SimpleDecoder(nn.Module):
         cn = self.init_c(feature.reshape(bs, -1))
         # xn: (bs x emb_dim)
         xn = self.emb(torch.full((bs,), self.bos_idx, dtype=torch.long, device=feature.device))
-        out = []
-        for step in range(1, self.max_seqlen):
+        # out: (bs x vocab_size x max_seqlen-1)
+        out = torch.empty((bs, self.vocab_size, self.max_seqlen-1), device=feature.device)
+        for step in range(self.max_seqlen-1):
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(xn, (hn, cn))
             # on: (bs x vocab_size)
             on = self.linear(self.dropout(hn))
-            out.append(on)
+            out[:, :, step] = on
             # xn: (bs x emb_dim)
             xn = self.emb(on.argmax(dim=1))
-        # out: (bs x vocab_size x max_seqlen-1)
-        out = torch.stack(out, dim=-1)
         return out
 
 class Captioning_Simple(nn.Module):
