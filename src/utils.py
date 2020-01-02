@@ -21,9 +21,9 @@ class BleuComputer():
         ref_list = [[sentence.split() for sentence in batch] for batch in ref_list]
         hyp_list = [sentence.split() for sentence in hyp_list]
         out = {}
+        weights = [0, 0, 0, 0]
         for i in range(self.n):
-            weights = [0, 0, 0, 0]
-            weights[i] = 1
+            weights[:i+1] = 1 / self.n
             out["BLEU-{}".format(i+1)] = corpus_bleu(ref_list, hyp_list, weights)
         return out
 
@@ -33,10 +33,10 @@ class ModelSaver():
         self.best = init_val
         self.epoch = 1
 
-    def load_ckpt(self, model, optimizer):
+    def load_ckpt(self, model, optimizer, device):
         if os.path.exists(self.path):
             logging.info(f"loading model from {self.path}")
-            ckpt = torch.load(self.path, map_location="cpu")
+            ckpt = torch.load(self.path, map_location=device)
             model.load_state_dict(ckpt["model"])
             optimizer.load_state_dict(ckpt["optimizer"])
             self.best = ckpt["bestscore"]
@@ -44,17 +44,19 @@ class ModelSaver():
             logging.info(f"best score is set to {self.best}, restarting from epoch {self.epoch}")
         else:
             logging.error(f"{self.path} does not exist, not loading")
+        return self.epoch
 
     def save_ckpt_if_best(self, model, optimizer, metric):
         if metric > self.best:
             logging.info(f"score {metric} is better than previous best score of {self.best}, saving to {self.path}")
+            self.best = metric
             save = { "optimizer": optimizer.state_dict() }
             if hasattr(model, "module"):
                 save["model"] = model.module.state_dict()
             else:
                 save["model"] = model.state_dict()
-            self.best = metric
             save["epoch"] = self.epoch
+            save["bestscore"] = self.best
             torch.save(save, self.path)
         else:
             logging.info(f"score {metric} is not better than previous best score of {self.best}, not saving")

@@ -6,7 +6,7 @@ caption_file_path: annotations/captions_train2017.txt
 log_dir: ../log
 result_dir: ../out
 
-max_epoch: 10
+max_epoch: 20
 num_worker: 4
 
 min_freq: 5

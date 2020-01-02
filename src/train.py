@@ -35,6 +35,7 @@ Args:
     criterion:          Loss function
     device:             CPU or GPU
     tb_logger:          TensorBoard logger
+    ep:                 epoch
 """
 def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
@@ -78,8 +79,6 @@ Args:
     tokenizer:          Tokenizer
     evaluator:          NLGEval instance for computing metrics
     device:             CPU or GPU
-    tb_logger:          TensorBoard logger
-    ep:                 epoch
 """
 def validate(val_iterator, model, tokenizer, evaluator, device):
     gt_list = []
@@ -140,14 +139,14 @@ if __name__ == "__main__":
     tb_logdir = os.path.join(CONFIG.log_dir, CONFIG.config_name)
     if not os.path.exists(tb_logdir):
         os.makedirs(tb_logdir)
-    tb_logger = SummaryWriter(log_dir=tb_logdir)
+    tb_logger = SummaryWriter(log_dir=tb_logdir, purge_step=0)
 
-    logging.info("Initializing tokenizer and loading vocabulary from {} ...".format(os.path.join(CONFIG.data_path, CONFIG.caption_file_path)))
+    logging.debug("Initializing tokenizer and loading vocabulary from {} ...".format(os.path.join(CONFIG.data_path, CONFIG.caption_file_path)))
     tokenizer = BasicTokenizer(min_freq=CONFIG.min_freq, max_len=CONFIG.max_len)
     tokenizer.from_textfile(os.path.join(CONFIG.data_path, CONFIG.caption_file_path))
-    logging.info("done!")
+    logging.debug("done!")
 
-    logging.info("Initializing Dataset...")
+    logging.debug("Initializing Dataset...")
     transform = transforms.Compose([
         transforms.Resize(256),
         transforms.RandomCrop(224),
@@ -160,37 +159,42 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker, pin_memory=True, collate_fn=train_collater)
     val_dset = CocoDataset(CONFIG.data_path, mode="val", tokenizer=tokenizer, transform=transform)
     val_loader = DataLoader(val_dset, batch_size=CONFIG.batch_size, shuffle=True, num_workers=CONFIG.num_worker, pin_memory=True, collate_fn=val_collater)
-    logging.info("done!")
+    logging.debug("done!")
 
-    logging.info("loading model...")
+    logging.debug("loading model...")
     if torch.cuda.is_available:
         device = torch.device("cuda")
-        logging.info("using {} GPU(s)".format(torch.cuda.device_count()))
+        logging.debug("using {} GPU(s)".format(torch.cuda.device_count()))
     else:
         device = torch.device("cpu")
-        logging.info("using CPU")
+        logging.debug("using CPU")
     if CONFIG.attention:
         model = Captioning_Attention(cnn_type=CONFIG.cnn_arch, pretrained=True, spatial_size=CONFIG.spatial_size, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob, bos_idx=tokenizer.bosidx)
     else:
         model = Captioning_Simple(cnn_type=CONFIG.cnn_arch, pretrained=True, spatial_size=CONFIG.spatial_size, emb_dim=CONFIG.emb_dim, memory_dim=CONFIG.memory_dim,
             vocab_size=len(tokenizer), max_seqlen=CONFIG.max_len, dropout_p=CONFIG.dropout_p, ss_prob=CONFIG.ss_prob, bos_idx=tokenizer.bosidx)
+    model = model.to(device)
+    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
+
     model_path = os.path.join(outdir, "best_score.ckpt")
     saver = ModelSaver(model_path, init_val=0)
-    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, betas=(CONFIG.beta1, CONFIG.beta2))
+    offset_ep = 1
     if opt.resume:
-        saver.load_ckpt(model, optimizer)
+        offset_ep = saver.load_ckpt(model, optimizer, device)
+        if offset_ep > CONFIG.max_epoch:
+            logging.error("trying to restart at epoch {} while max training is set to {} epochs".format(offset_ep, CONFIG.max_epoch))
+            sys.exit(1)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.padidx)
-    model = model.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    logging.info("done!")
+    logging.debug("done!")
 
-    logging.info("loading evaluator...")
+    logging.debug("loading evaluator...")
     evaluator = BleuComputer()
-    logging.info("done!")
+    logging.debug("done!")
 
-    for ep in range(CONFIG.max_epoch):
+    for ep in range(offset_ep-1, CONFIG.max_epoch):
         logging.info("global {} | begin training for epoch {}".format(global_timer, ep+1))
         train_epoch(train_loader, model, optimizer, criterion, device, tb_logger, ep)
         logging.info("global {} | done with training for epoch {}, beginning validation".format(global_timer, ep+1))
