@@ -106,6 +106,7 @@ class AttentionDecoder(nn.Module):
         self.rnn.apply(weight_init)
         self.emb.apply(weight_init)
         self.linear.apply(weight_init)
+        self.f_beta.apply(weight_init)
 
     """
     Args:
@@ -132,6 +133,9 @@ class AttentionDecoder(nn.Module):
             # weighted_feature: (bs x feature_dim)
             alpha, weighted_feature = self.attention(feature, hn)
             alphas[:, :, step] = alpha
+            # beta: (bs x 1)
+            beta = self.sigmoid(self.f_beta(hn))
+            weighted_feature *= beta
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(torch.cat([xn, weighted_feature], dim=1), (hn, cn))
             # on: (bs x vocab_size)
@@ -157,6 +161,9 @@ class AttentionDecoder(nn.Module):
             # weighted_feature: (bs x feature_dim)
             alpha, weighted_feature = self.attention(feature, hn)
             alphas[:, :, step] = alpha
+            # beta: (bs x 1)
+            beta = self.sigmoid(self.f_beta(hn))
+            weighted_feature *= beta
             # hn, cn: (bs x memory_dim)
             hn, cn = self.rnn(torch.cat([xn, weighted_feature], dim=1), (hn, cn))
             # on: (bs x vocab_size)
