@@ -201,7 +201,7 @@ if __name__ == "__main__":
         metrics = validate(val_loader, model, tokenizer, evaluator, device)
         for key, val in metrics.items():
             tb_logger.add_scalar("metrics/{}".format(key), val, ep+1)
-        saver.save_ckpt_if_best(model, optimizer, metrics["BLEU-1"]+metrics["BLEU-2"]+metrics["BLEU-3"]+metrics["BLEU-4"])
+        saver.save_ckpt_if_best(model, optimizer, metrics["BLEU-4"])
         logging.info("global {} | end epoch {}".format(global_timer, ep+1))
     logging.info("done training!!")
 
