@@ -139,7 +139,7 @@ if __name__ == "__main__":
     tb_logdir = os.path.join(CONFIG.log_dir, CONFIG.config_name)
     if not os.path.exists(tb_logdir):
         os.makedirs(tb_logdir)
-    tb_logger = SummaryWriter(log_dir=tb_logdir, purge_step=0)
+    tb_logger = SummaryWriter(log_dir=tb_logdir)
 
     logging.debug("Initializing tokenizer and loading vocabulary from {} ...".format(os.path.join(CONFIG.data_path, CONFIG.caption_file_path)))
     tokenizer = BasicTokenizer(min_freq=CONFIG.min_freq, max_len=CONFIG.max_len)
