@@ -40,7 +40,8 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
     epoch_timer = Timer()
     model.train()
     # whether or not use doubly stochastic attention
-    dsflag = isinstance(model, Captioning_Attention)
+    m = model.module if hasattr(model, "module") else model
+    dsflag = isinstance(m, Captioning_Attention)
     losses = {}
     for it, data in enumerate(train_iterator):
         image = data["image"]
@@ -58,10 +59,12 @@ def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, 
             decoded = model(image, caption, length)
         losses["NLLLoss"] = criterion(decoded, caption[:, 1:])
         lossstr = ""
+        cumloss = 0
         for loss_name, loss in losses.items():
-            loss.backward()
+            cumloss += loss
             tb_logger.add_scalar("loss/{}".format(loss_name), loss.item(), ep*len(train_iterator)+it)
             lossstr += " {}: {:.6f} |".format(loss_name, loss.item())
+        cumloss.backward()
         optimizer.step()
 
         if it % 10 == 9:
