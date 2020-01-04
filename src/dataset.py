@@ -46,6 +46,9 @@ class CocoDataset(Dataset):
     def __getitem__(self, idx):
         img_id = self.img_ids[idx]
         ann_id = self.ann_ids[idx][:5]
+        while len(ann_id) < 5:
+            ann_id += ann_id[-1]
+        assert len(ann_id) == 5
         path = self.coco.loadImgs(img_id)[0]['file_name']
 
         raw_caption = [obj['caption'] for obj in self.coco.loadAnns(ann_id)]
