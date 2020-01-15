@@ -109,7 +109,6 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
             hyps = generated[:5]
             for gt, hyp in zip(gts, hyps):
                 logging.debug("ground truth: {}, sampled: {}".format(gt, hyp))
-            break
     metrics = {}
     logging.info("---METRICS---")
     metrics = evaluator.compute_metrics(ref_list=[[sen.strip() for sen in refs] for refs in zip(*gt_list)], hyp_list=ans_list)
