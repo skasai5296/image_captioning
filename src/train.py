@@ -110,6 +110,7 @@ def validate(val_iterator, model, tokenizer, evaluator, device):
             for gt, hyp in zip(gts, hyps):
                 logging.debug("ground truth: {}, sampled: {}".format(gt, hyp))
             break
+    metrics = {}
     logging.info("---METRICS---")
     metrics = evaluator.compute_metrics(ref_list=[[sen.strip() for sen in refs] for refs in zip(*gt_list)], hyp_list=ans_list)
     for k, v in metrics.items():
@@ -193,7 +194,7 @@ if __name__ == "__main__":
 
     logging.debug("loading evaluator...")
     #evaluator = BleuComputer()
-    evaluator = NLGEval()
+    evaluator = NLGEval(metrics_to_omit=["METEOR"]) # meteor has problems, so omit
     logging.debug("done!")
 
     for ep in range(offset_ep-1, CONFIG.max_epoch):
@@ -203,7 +204,8 @@ if __name__ == "__main__":
         metrics = validate(val_loader, model, tokenizer, evaluator, device)
         for key, val in metrics.items():
             tb_logger.add_scalar("metrics/{}".format(key), val, ep+1)
-        saver.save_ckpt_if_best(model, optimizer, metrics["METEOR"])
+        if "Bleu_4" in metrics.keys():
+            saver.save_ckpt_if_best(model, optimizer, metrics["Bleu_4"])
         logging.info("global {} | end epoch {}".format(global_timer, ep+1))
     logging.info("done training!!")
 

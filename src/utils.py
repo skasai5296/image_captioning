@@ -24,7 +24,7 @@ class BleuComputer():
         weights = [0, 0, 0, 0]
         for i in range(self.n):
             weights = [1 / (i+1) if j <= i else 0 for j in range(len(weights))]
-            out["BLEU-{}".format(i+1)] = corpus_bleu(ref_list, hyp_list, weights)
+            out["Bleu_{}".format(i+1)] = corpus_bleu(ref_list, hyp_list, weights)
         return out
 
 class ModelSaver():

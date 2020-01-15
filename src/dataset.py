@@ -51,7 +51,7 @@ class CocoDataset(Dataset):
         assert len(ann_id) == 5
         path = self.coco.loadImgs(img_id)[0]['file_name']
 
-        raw_caption = [obj['caption'] for obj in self.coco.loadAnns(ann_id)]
+        raw_caption = [obj['caption'].rstrip() for obj in self.coco.loadAnns(ann_id)]
         image = accimage.Image(os.path.join(self.img_path, path))
         if self.transform is not None:
             image = self.transform(image)
