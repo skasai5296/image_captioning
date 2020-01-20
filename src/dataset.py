@@ -52,7 +52,10 @@ class CocoDataset(Dataset):
         path = self.coco.loadImgs(img_id)[0]['file_name']
 
         raw_caption = [obj['caption'].rstrip() for obj in self.coco.loadAnns(ann_id)]
-        image = accimage.Image(os.path.join(self.img_path, path))
+        try:
+            image = accimage.Image(os.path.join(self.img_path, path))
+        except OSError:
+            image = Image.open(os.path.join(self.img_path, path)).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
         caption = self.tokenizer.encode(raw_caption)
