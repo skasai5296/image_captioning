@@ -40,8 +40,8 @@ Args:
 def train_epoch(train_iterator, model, optimizer, criterion, device, tb_logger, ep):
     epoch_timer = Timer()
     model.train()
-    # whether or not use doubly stochastic attention
     m = model.module if hasattr(model, "module") else model
+    # whether or not use doubly stochastic attention
     dsflag = isinstance(m, Captioning_Attention)
     losses = {}
     for it, data in enumerate(train_iterator):
